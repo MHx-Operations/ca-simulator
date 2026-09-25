@@ -1,0 +1,21 @@
+# Build context hygiene. The Dockerfile does `COPY . /app/`, so anything not
+# listed here ends up inside the image. Configuration that carries secrets or
+# tenant data is supplied at runtime instead (docs/multi-tenant/README.md):
+# .env holds the app registration's client id and, for the hardened
+# deployment, the sidecar's client and cookie secrets; the tenant lists name
+# your customers.
+.env
+.env.*
+!.env.example
+public/tenants.json
+tenants.json
+
+# Reinstalled by `npm install` in the build; copying the host's tree in would
+# also drag in platform-specific native builds.
+node_modules/
+dist/
+*.tsbuildinfo
+
+.git/
+.github/
+.claude/

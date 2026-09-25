@@ -1,0 +1,66 @@
+# Hardened deployment overlay: puts the whole app, and the tenant list with it,
+# behind an oauth2-proxy sign-in against your own Entra tenant.
+# See docs/multi-tenant/README.md for the prerequisites and the walkthrough.
+#
+# Run from the repository root (needs Docker Compose 2.24 or later for !reset):
+#   docker compose -f docker-compose.yml \
+#     -f docs/multi-tenant/docker-compose.hardened.yml up -d
+#
+# Every value comes from .env in the repository root (template:
+# docs/multi-tenant/.env.example). `${VAR:?}` makes Compose refuse to start
+# when a required value is missing, instead of starting a sidecar with an
+# empty setting.
+services:
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.4
+    restart: unless-stopped
+    ports:
+      # Plain HTTP. Publish it only where your TLS-terminating reverse proxy can
+      # reach it; the default binds to the host's loopback interface.
+      - "${OAUTH2_PROXY_BIND:-127.0.0.1:4180}:4180"
+    environment:
+      OAUTH2_PROXY_PROVIDER: entra-id
+      # Tenant-specific issuer, never /common/ or /organizations/: a token from
+      # any other tenant fails issuer validation here.
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://login.microsoftonline.com/${ENTRA_TENANT_ID:?}/v2.0
+      OAUTH2_PROXY_ENTRA_ID_ALLOWED_TENANTS: ${ENTRA_TENANT_ID:?}
+      # The sidecar's own single-tenant Web app registration, not the SPA's.
+      OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_PROXY_CLIENT_ID:?}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:?}
+      OAUTH2_PROXY_REDIRECT_URL: https://${PUBLIC_HOST:?}/oauth2/callback
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:?}
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      # The sidecar does not re-check the account while the cookie is valid, so
+      # this is how long a disabled account keeps access.
+      OAUTH2_PROXY_COOKIE_EXPIRE: ${OAUTH2_PROXY_COOKIE_EXPIRE:-12h}
+      # Redirect straight to the Entra sign-in instead of showing a button page.
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      # Correct only behind a TLS-terminating proxy that sets X-Forwarded-*,
+      # and only headers from that proxy's address are trusted.
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_TRUSTED_PROXY_IPS: ${OAUTH2_PROXY_TRUSTED_PROXY_IPS:?}
+      # "*" admits every account that can sign in to the tenant above (guests
+      # included); a comma-separated list of domains narrows it further.
+      OAUTH2_PROXY_EMAIL_DOMAINS: ${OAUTH2_PROXY_EMAIL_DOMAINS:-*}
+      # One line, no space after the comma. A file:// upstream must name a
+      # directory; /private/ holds nothing but the mounted list.
+      OAUTH2_PROXY_UPSTREAMS: "http://ca-simulator:5173/,file:///private/#/private/"
+      OAUTH2_PROXY_HTTP_ADDRESS: "0.0.0.0:4180"
+    volumes:
+      # Read per request: editing the list needs no restart, and it never
+      # becomes part of an image.
+      - ${TENANTS_FILE:?}:/private/tenants.json:ro
+    depends_on:
+      - ca-simulator
+
+  ca-simulator:
+    # Only oauth2-proxy may be reachable. Compose cannot delete keys from the
+    # base file, so reset them: a published app port would bypass the sign-in.
+    # Volumes are reset too, in case the base file mounts a list into public/
+    # (the plain-file option), which the app would keep serving.
+    ports: !reset []
+    volumes: !reset []
+    environment:
+      - VITE_TENANTS_URL=/private/tenants.json
+      - __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=${PUBLIC_HOST:?}

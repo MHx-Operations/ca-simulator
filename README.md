@@ -96,6 +96,12 @@ between tenants while you stay signed in:
    sign-in for that tenant and brings you back to it. The app never starts that
    flow by itself.
 
+A `tenants.json` served from `public/` is readable by anyone who can reach the
+host, without signing in. For a host reachable from the internet, see
+[Deploying the tenant list](docs/multi-tenant/README.md) — it covers the
+`VITE_TENANTS_URL` setting and a deployment that serves the app and the list
+only after a sign-in against your own tenant.
+
 ## Visualization Modes
 
 **Grid** — Tile-based overview of all policies, color-coded by category (Identity, Security, Device, Location, Risk, App Protection, Session). After evaluation, applied policies glow green/orange/red, skipped policies dim.
