@@ -136,13 +136,20 @@ export function applyCanonicalTenantParam(canonicalId: string): void {
 }
 
 /**
- * Fetches /tenants.json and returns the validated tenant list, or [] for
- * every failure shape: absent file, network failure, empty body, an HTML
- * SPA-rewrite body, or malformed/wrong-shape JSON. Never throws, never logs.
+ * Fetches the tenant list from `import.meta.env.VITE_TENANTS_URL`, falling
+ * back to `/tenants.json` when the variable is unset or empty, and returns
+ * the validated tenant list, or [] for every failure shape: absent file,
+ * network failure, empty body, an HTML SPA-rewrite body (e.g. a followed
+ * sidecar login redirect), or malformed/wrong-shape JSON. Never throws,
+ * never logs. The URL itself is deliberately not a secret — `VITE_*` values
+ * are inlined into the built bundle — so a hardened deployment's protection
+ * comes from the browser's own same-origin session cookie, never anything
+ * this function supplies.
  */
 export async function loadTenants(fetchImpl: typeof fetch = fetch): Promise<TenantEntry[]> {
   try {
-    const res = await fetchImpl('/tenants.json', { cache: 'no-store' });
+    const source = import.meta.env.VITE_TENANTS_URL || '/tenants.json';
+    const res = await fetchImpl(source, { cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
     return parseTenantList(data);

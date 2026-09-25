@@ -86,12 +86,56 @@ describe('parseTenantList', () => {
 });
 
 describe('loadTenants', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it('returns the parsed entry on the happy path and fetches /tenants.json', async () => {
     const mockFetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify([{ name: 'Example Tenant', tenantId: GOOD_A.tenantId }]), { status: 200 }),
     );
     expect(await loadTenants(mockFetch)).toEqual([GOOD_A]);
     expect(mockFetch).toHaveBeenCalledWith('/tenants.json', expect.anything());
+  });
+
+  it('fetches the configured VITE_TENANTS_URL instead of the default when set', async () => {
+    vi.stubEnv('VITE_TENANTS_URL', '/private/tenants.json');
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{ name: 'Example Tenant', tenantId: GOOD_A.tenantId }]), { status: 200 }),
+    );
+    expect(await loadTenants(mockFetch)).toEqual([GOOD_A]);
+    expect(mockFetch).toHaveBeenCalledWith('/private/tenants.json', expect.anything());
+  });
+
+  it('falls back to /tenants.json when VITE_TENANTS_URL is set but empty', async () => {
+    vi.stubEnv('VITE_TENANTS_URL', '');
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([{ name: 'Example Tenant', tenantId: GOOD_A.tenantId }]), { status: 200 }),
+    );
+    expect(await loadTenants(mockFetch)).toEqual([GOOD_A]);
+    expect(mockFetch).toHaveBeenCalledWith('/tenants.json', expect.anything());
+  });
+
+  it.each([401, 403])('returns [] and does not throw when a configured protected source answers %i', async (status) => {
+    vi.stubEnv('VITE_TENANTS_URL', '/private/tenants.json');
+    const mockFetch = vi.fn().mockResolvedValue(new Response(null, { status }));
+    await expect(loadTenants(mockFetch)).resolves.toEqual([]);
+  });
+
+  it('returns [] silently when a configured protected source answers with an HTML page instead of JSON', async () => {
+    vi.stubEnv('VITE_TENANTS_URL', '/private/tenants.json');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response('<!doctype html><html></html>', { status: 200, headers: { 'content-type': 'text/html' } }),
+    );
+    expect(await loadTenants(mockFetch)).toEqual([]);
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
   });
 
   it('returns [] on a 404', async () => {
