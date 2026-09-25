@@ -57,6 +57,45 @@ To connect to your own Microsoft Entra ID tenant:
    ```
 6. Run `npm run dev` and click **Sign In**
 
+## Multiple tenants
+
+For consultants and MSPs working across several tenants, the app can switch
+between tenants while you stay signed in:
+
+1. Copy the committed example file to the (gitignored) real one:
+   ```bash
+   cp public/tenants.example.json public/tenants.json
+   ```
+2. Edit `public/tenants.json` — one object per tenant, each with a `name` (any
+   label you choose) and a `tenantId` (the directory GUID):
+   ```json
+   [
+     { "name": "Contoso", "tenantId": "00000000-0000-0000-0000-000000000001" },
+     { "name": "Fabrikam", "tenantId": "00000000-0000-0000-0000-000000000002" }
+   ]
+   ```
+3. If `public/tenants.json` is absent or empty, nothing changes: sign-in uses the
+   standard multi-tenant `organizations` authority and the header looks exactly as
+   it does today.
+4. Signing in is the ordinary **Sign in** button and lands in your own (home)
+   tenant. With entries configured, the data-source menu gains a **Switch
+   tenant** submenu once you are connected.
+5. A `?tenant=<tenantId|name>` query parameter selects a tenant automatically
+   right after sign-in. Matching is case-insensitive by id or name, and the URL
+   is rewritten to the canonical tenant id once resolved.
+6. The last tenant you used is remembered in `localStorage` under
+   `ca-sim:tenant` and selected automatically on your next visit.
+7. While connected, the header names the configured tenant and offers a
+   **Switch tenant** submenu. Picking another tenant switches in place using
+   your existing sign-in — no sign-out, no second sign-in flow. If you had
+   already loaded live data, the new tenant's data is loaded straight away;
+   from sample data or before any load, pick **Load from Tenant** when you want
+   it. If you have unsaved sandbox changes, you're asked to confirm first. If the target tenant's Conditional Access requires a
+   fresh sign-in (for example a sign-in frequency policy), the app says so and
+   the banner offers a **Sign in to ‹tenant›** button: it starts an interactive
+   sign-in for that tenant and brings you back to it. The app never starts that
+   flow by itself.
+
 ## Visualization Modes
 
 **Grid** — Tile-based overview of all policies, color-coded by category (Identity, Security, Device, Location, Risk, App Protection, Session). After evaluation, applied policies glow green/orange/red, skipped policies dim.

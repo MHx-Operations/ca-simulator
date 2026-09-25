@@ -8,6 +8,7 @@ import {
   pruneSandboxAssignments,
   sameMembers,
   getAssignmentField,
+  hasSandboxChanges,
 } from '../sandbox';
 import type { ConditionalAccessPolicy, PolicyConditions } from '@/engine/models/Policy';
 
@@ -240,6 +241,32 @@ describe('applySandboxEdits — agent fields', () => {
     expect(result[0].conditions.clientApplications!.excludeAgentIdServicePrincipals).toEqual(['approved-agent']);
     expect(result[0].conditions.clientApplications!.includeAgentIdServicePrincipals).toEqual(['All']);
     expect(policy.conditions.clientApplications!.excludeAgentIdServicePrincipals).toBeUndefined();
+  });
+});
+
+describe('hasSandboxChanges', () => {
+  it('returns false when all three maps are empty', () => {
+    expect(hasSandboxChanges({}, {}, {})).toBe(false);
+  });
+
+  it('returns true when only sandboxOverrides has an entry', () => {
+    expect(hasSandboxChanges({ p1: 'disabled' }, {}, {})).toBe(true);
+  });
+
+  it('returns true when only sandboxAssignments has an entry', () => {
+    expect(hasSandboxChanges({}, { p1: { excludeUsers: ['u1'] } }, {})).toBe(true);
+  });
+
+  it('returns true when only sandboxDrafts has an entry', () => {
+    const draft = createPolicy({ id: 'p1' });
+    expect(hasSandboxChanges({}, {}, { p1: draft })).toBe(true);
+  });
+
+  it('returns true when multiple maps have entries', () => {
+    const draft = createPolicy({ id: 'p2' });
+    expect(
+      hasSandboxChanges({ p1: 'disabled' }, { p1: { excludeUsers: ['u1'] } }, { p2: draft }),
+    ).toBe(true);
   });
 });
 

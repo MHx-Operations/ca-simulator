@@ -11,9 +11,10 @@ vi.mock('../../services/auth', () => ({
 }));
 
 const loadPoliciesFromGraphMock = vi.fn();
+const fetchTenantNameMock = vi.fn();
 vi.mock('../../services/graphService', () => ({
   loadPoliciesFromGraph: (...args: unknown[]) => loadPoliciesFromGraphMock(...args),
-  fetchTenantName: vi.fn(async () => 'Contoso'),
+  fetchTenantName: (...args: unknown[]) => fetchTenantNameMock(...args),
 }));
 
 import { usePolicyStore } from '../usePolicyStore';
@@ -75,6 +76,8 @@ function seedLive(policies: ConditionalAccessPolicy[]) {
 beforeEach(() => {
   usePolicyStore.setState(initialState, true);
   loadPoliciesFromGraphMock.mockReset();
+  fetchTenantNameMock.mockReset();
+  fetchTenantNameMock.mockResolvedValue('Contoso');
 });
 
 describe('sandbox overrides', () => {
@@ -391,5 +394,74 @@ describe('sandbox across data loads', () => {
     expect(s.sandboxActive).toBe(false);
     expect(s.sandboxOverrides).toEqual({});
     expect(s.effectivePolicies).toBe(s.policies);
+  });
+});
+
+// ── Stale in-flight loads ──
+//
+// A tenant switch no longer unloads the page, so a load started for the
+// previous tenant can still be in flight when the new tenant's data is
+// already on screen. The later-resolving load must not win.
+describe('stale load results', () => {
+  // Lets the in-flight load reach its awaited Graph call before the switch
+  // clears the store — otherwise the fake resolver is not wired up yet.
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('discards a load that resolves after clear()', async () => {
+    let finishLoad!: (result: ReturnType<typeof graphResult>) => void;
+    loadPoliciesFromGraphMock.mockImplementationOnce(
+      () => new Promise((resolve) => { finishLoad = resolve; }),
+    );
+
+    const stale = usePolicyStore.getState().loadFromGraph();
+
+    // The switch: every store is cleared, then the new tenant's data lands.
+    usePolicyStore.getState().clear();
+    loadPoliciesFromGraphMock.mockResolvedValue(graphResult([createPolicy({ id: 'new-tenant-policy' })]));
+    await usePolicyStore.getState().loadFromGraph();
+
+    finishLoad(graphResult([createPolicy({ id: 'old-tenant-policy' })]));
+    await stale;
+
+    const s = usePolicyStore.getState();
+    expect(s.policies.map((p) => p.id)).toEqual(['new-tenant-policy']);
+    expect(s.effectivePolicies.map((p) => p.id)).toEqual(['new-tenant-policy']);
+    expect(s.dataSource).toBe('live');
+    expect(s.isLoading).toBe(false);
+  });
+
+  it('discards a failing load that rejects after clear(), leaving no stale error', async () => {
+    let failLoad!: (error: Error) => void;
+    loadPoliciesFromGraphMock.mockImplementationOnce(
+      () => new Promise((_resolve, reject) => { failLoad = reject; }),
+    );
+
+    const stale = usePolicyStore.getState().loadFromGraph();
+    await settle();
+    usePolicyStore.getState().clear();
+
+    failLoad(new Error('previous tenant graph failure'));
+    await stale;
+
+    const s = usePolicyStore.getState();
+    expect(s.error).toBeNull();
+    expect(s.isLoading).toBe(false);
+    expect(s.dataSource).toBe('none');
+  });
+
+  it('drops a tenant name that resolves after clear()', async () => {
+    let finishName!: (name: string) => void;
+    fetchTenantNameMock.mockImplementationOnce(
+      () => new Promise((resolve) => { finishName = resolve; }),
+    );
+
+    const stale = usePolicyStore.getState().loadTenantName();
+    await settle();
+    usePolicyStore.getState().clear();
+
+    finishName('Previous Tenant');
+    await stale;
+
+    expect(usePolicyStore.getState().tenantName).toBeNull();
   });
 });

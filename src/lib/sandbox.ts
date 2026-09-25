@@ -147,6 +147,21 @@ export function applySandboxEdits(
   });
 }
 
+// Inline copies of this same three-map check live in ResultsSummary.tsx and
+// SandboxBar.tsx — not deduped here to keep the upstream diff minimal.
+// This is the one call site (Header.tsx switch confirmation) that uses it.
+export function hasSandboxChanges(
+  sandboxOverrides: SandboxOverrides,
+  sandboxAssignments: SandboxAssignments,
+  sandboxDrafts: Record<string, ConditionalAccessPolicy>,
+): boolean {
+  return (
+    Object.keys(sandboxOverrides).length > 0 ||
+    Object.keys(sandboxAssignments).length > 0 ||
+    Object.keys(sandboxDrafts).length > 0
+  );
+}
+
 /**
  * Drops overrides that no longer deviate: policies that disappeared from the
  * tenant (renamed/deleted between refreshes) and overrides matching the

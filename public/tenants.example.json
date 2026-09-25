@@ -1,0 +1,10 @@
+[
+  {
+    "name": "Example Tenant",
+    "tenantId": "00000000-0000-0000-0000-000000000001"
+  },
+  {
+    "name": "Second Example Tenant",
+    "tenantId": "00000000-0000-0000-0000-000000000002"
+  }
+]

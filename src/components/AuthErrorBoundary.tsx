@@ -12,6 +12,11 @@ import { AlertTriangle, X } from 'lucide-react';
 export function AuthErrorBanner() {
   const authError = useAuthStore((s) => s.authError);
   const clearAuthError = useAuthStore((s) => s.clearAuthError);
+  // Set only by the tenant-refusal banner, and it names the tenant the refusal
+  // was about — so the offered cure can never point at a different tenant than
+  // the message does.
+  const reauthTenant = useAuthStore((s) => s.reauthTenant);
+  const reauthenticate = useAuthStore((s) => s.reauthenticate);
 
   if (!authError) return null;
 
@@ -25,6 +30,18 @@ export function AuthErrorBanner() {
         {authError}
         {' '}You can continue using Sample Mode.
       </span>
+      {reauthTenant && (
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 shrink-0 text-xs"
+          onClick={() => {
+            reauthenticate(reauthTenant).catch(() => {});
+          }}
+        >
+          Sign in to {reauthTenant.name}
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="sm"

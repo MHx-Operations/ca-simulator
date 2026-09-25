@@ -4,6 +4,7 @@ import { usePolicyStore } from '@/stores/usePolicyStore';
 import { usePersonaStore } from '@/stores/usePersonaStore';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import type { SimulationContext } from '@/engine/models/SimulationContext';
+import type { TenantEntry } from '@/lib/tenants';
 import { COLORS, APP_VERSION } from '@/data/theme';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,7 +14,19 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { hasSandboxChanges } from '@/lib/sandbox';
 import { AboutDialog } from '@/components/AboutDialog';
 import { LimitationsDialog } from '@/components/LimitationsDialog';
 import { ResultsTipsDialog } from '@/components/ResultsTipsDialog';
@@ -26,21 +39,56 @@ interface HeaderProps {
   onStartTour: () => void;
 }
 
+// Tenant item renderer: the tenant list renders in exactly ONE place, the
+// data-source menu's "Switch tenant" submenu. There is no pre-sign-in picker
+// — signing in happens at the account's home tenant and a tenant is chosen
+// only while connected. The helper stays because
+// it is where the check-mark idiom lives; never build a second tenant item map.
+function renderTenantItems(
+  tenants: TenantEntry[],
+  markedId: string | null,
+  onPick: (tenant: TenantEntry) => void,
+  disabled: boolean,
+) {
+  return tenants.map((tenant) => (
+    <DropdownMenuItem
+      key={tenant.tenantId}
+      onClick={() => onPick(tenant)}
+      disabled={disabled}
+      className="gap-2 text-xs"
+    >
+      {tenant.name}
+      {tenant.tenantId === markedId && <Check className="h-3.5 w-3.5 ml-auto" />}
+    </DropdownMenuItem>
+  ));
+}
+
 export function Header({ onStartTour }: HeaderProps) {
   const accounts = useAuthStore((s) => s.accounts);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const login = useAuthStore((s) => s.login);
   const logout = useAuthStore((s) => s.logout);
+  const tenants = useAuthStore((s) => s.tenants);
+  const selectedTenant = useAuthStore((s) => s.selectedTenant);
+  const switchTenant = useAuthStore((s) => s.switchTenant);
+  // A switch already in flight (including the session's automatic first one)
+  // drops any further pick in silence, so the items say so instead.
+  const isSwitching = useAuthStore((s) => s.isSwitching);
   const account = accounts[0];
   const dataSource = usePolicyStore((s) => s.dataSource);
   const tenantName = usePolicyStore((s) => s.tenantName);
   const isLoading = usePolicyStore((s) => s.isLoading);
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const setSandboxActive = usePolicyStore((s) => s.setSandboxActive);
+  const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
+  const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
+  const sandboxDrafts = usePolicyStore((s) => s.sandboxDrafts);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [limitationsOpen, setLimitationsOpen] = useState(false);
   const [tipsOpen, setTipsOpen] = useState(false);
   const [releaseNotesOpen, setReleaseNotesOpen] = useState(false);
+  const [switchConfirmOpen, setSwitchConfirmOpen] = useState(false);
+  const [pendingTenant, setPendingTenant] = useState<TenantEntry | null>(null);
   const loadTenantName = usePolicyStore((s) => s.loadTenantName);
 
   // Fetch tenant name on page refresh when already authenticated
@@ -52,6 +100,29 @@ export function Header({ onStartTour }: HeaderProps) {
 
   const handleLogin = () => {
     login().catch(console.error);
+  };
+
+  // Picking the currently connected tenant is a no-op; switching
+  // confirms only when the sandbox has pending changes.
+  const requestSwitch = (tenant: TenantEntry) => {
+    if (tenant.tenantId === selectedTenant?.tenantId) return;
+    if (hasSandboxChanges(sandboxOverrides, sandboxAssignments, sandboxDrafts)) {
+      setPendingTenant(tenant);
+      setSwitchConfirmOpen(true);
+      return;
+    }
+    switchTenant(tenant).catch(() => {});
+  };
+
+  const confirmSwitch = () => {
+    if (pendingTenant) switchTenant(pendingTenant).catch(() => {});
+    setSwitchConfirmOpen(false);
+    setPendingTenant(null);
+  };
+
+  const cancelSwitch = () => {
+    setSwitchConfirmOpen(false);
+    setPendingTenant(null);
   };
 
   const handleLogout = () => {
@@ -191,7 +262,12 @@ export function Header({ onStartTour }: HeaderProps) {
               ) : tenantName ? (
                 <>
                   <Globe className="h-3 w-3" style={{ color: COLORS.textMuted }} />
-                  <span>{tenantName}</span>
+                  <span>{selectedTenant?.name ?? tenantName}</span>
+                  {selectedTenant && tenantName !== selectedTenant.name && (
+                    <span className="text-[10px]" style={{ color: COLORS.textMuted }}>
+                      {tenantName}
+                    </span>
+                  )}
                 </>
               ) : (
                 <span style={{ color: COLORS.textMuted }}>Not connected</span>
@@ -210,6 +286,17 @@ export function Header({ onStartTour }: HeaderProps) {
               {isAuthenticated ? 'Load from Tenant' : 'Sign in to Tenant'}
               {dataSource === 'live' && <Check className="h-3.5 w-3.5 ml-auto" />}
             </DropdownMenuItem>
+            {tenants.length > 0 && isAuthenticated && (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger className="gap-2 text-xs">
+                  <Globe className="h-3.5 w-3.5" />
+                  Switch tenant
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent>
+                  {renderTenantItems(tenants, selectedTenant?.tenantId ?? null, requestSwitch, isSwitching)}
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
@@ -274,6 +361,25 @@ export function Header({ onStartTour }: HeaderProps) {
       <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
       <ResultsTipsDialog open={tipsOpen} onOpenChange={setTipsOpen} />
       <LimitationsDialog open={limitationsOpen} onOpenChange={setLimitationsOpen} />
+      <Dialog open={switchConfirmOpen} onOpenChange={(open) => { if (!open) cancelSwitch(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Switch to {pendingTenant?.name}?</DialogTitle>
+            <DialogDescription>
+              Switching discards your unsaved sandbox changes and loads{' '}
+              {pendingTenant?.name} instead. You stay signed in.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={cancelSwitch}>
+              Cancel
+            </Button>
+            <Button variant="default" size="sm" onClick={confirmSwitch}>
+              Switch tenant
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </header>
     <AuthErrorBanner />
     </>

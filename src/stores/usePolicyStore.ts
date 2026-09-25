@@ -75,6 +75,14 @@ function computeEffectivePolicies(
   return [...applySandboxEdits(policies, overrides, assignments), ...draftList];
 }
 
+// Load generation. A tenant switch no longer unloads the page, so two loads
+// can be alive at once and the later-resolving one would win — landing the
+// previous tenant's policies under the new tenant's name. Every load stamps
+// itself here and drops its result if the stamp moved on; clear() (which every
+// switch and logout runs) and each new load bump it. Kept as a counter rather
+// than a tenant comparison so this store stays free of a useAuthStore import.
+let loadGeneration = 0;
+
 export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   policies: [],
   namedLocations: new Map(),
@@ -93,8 +101,13 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   effectivePolicies: [],
 
   loadTenantName: async () => {
+    // Observes the generation without bumping it: this call is a background
+    // read (the header effect) and must not invalidate a policy load running
+    // beside it. Its own result is dropped when a switch or a load intervened.
+    const gen = loadGeneration;
     const token = await getAccessToken();
     const name = await fetchTenantName(token);
+    if (gen !== loadGeneration) return;
     if (name) set({ tenantName: name });
   },
 
@@ -102,6 +115,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     // Three components can load each source, so this lives here rather than at
     // the buttons. Gated on an actual change so a refresh isn't a new choice.
     if (get().dataSource !== 'live') trackEvent({ name: 'source_chosen', props: { mode: 'live' } });
+    const gen = ++loadGeneration;
     set({ isLoading: true, error: null });
     try {
       const token = await getAccessToken();
@@ -109,6 +123,11 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
         loadPoliciesFromGraph(token),
         fetchTenantName(token),
       ]);
+      // Stale: a newer load, a tenant switch or a logout happened while this
+      // was in flight. Returning before the set() leaves isLoading to the load
+      // that superseded this one — writing it here would clear the spinner of
+      // a load still running.
+      if (gen !== loadGeneration) return;
       // Refreshing the same source keeps sandbox changes (pruned against the
       // new policy list); switching sources starts with a clean sandbox.
       const isRefresh = get().dataSource === 'live';
@@ -139,6 +158,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       });
       trackEvent({ name: 'load_outcome', props: { outcome: 'ok' } });
     } catch (error) {
+      if (gen !== loadGeneration) return;
       // The outcome is an enum, never the message — Graph errors carry tenant detail
       const isConsent =
         error instanceof GraphPermissionError ||
@@ -191,6 +211,9 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   },
 
   clear: () => {
+    // Invalidates every in-flight load: a switch that starts no new load (the
+    // sample-mode path) must still drop the previous tenant's pending results.
+    loadGeneration += 1;
     set({
       policies: [],
       namedLocations: new Map(),
@@ -198,6 +221,10 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       authStrengthMap: new Map(),
       tenantApplications: [],
       tenantName: null,
+      // A load invalidated above returns without writing isLoading (the load
+      // that superseded it owns the spinner); when nothing supersedes it, this
+      // is what puts the spinner back down.
+      isLoading: false,
       error: null,
       dataSource: 'none',
       sandboxActive: false,
