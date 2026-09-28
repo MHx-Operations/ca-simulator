@@ -64,7 +64,7 @@ src/
 ## Key Commands
 
 ```bash
-npm test          # Run all engine tests (778 tests, Vitest)
+npm test          # Run all engine tests (834 tests, Vitest)
 npm run dev       # Start dev server (localhost:5173)
 npm run build     # Production build (Vite)
 ```
@@ -108,7 +108,7 @@ npm run build     # Production build (Vite)
 - Console error statements log `err.message` only (not full error objects) to prevent tenant data leakage
 
 ### Analytics
-- **Two transports, split by capability.** Page views go to Vercel Web Analytics via `<Analytics/>` in `main.tsx`; the ten product events POST to `/api/e`, an edge function (`api/e.ts`) relaying to a self-hosted Umami. Vercel Hobby supports no custom events, which is why the events collected nothing before v0.6.14.
+- **Two transports, split by capability.** Page views go to Vercel Web Analytics via `<Analytics/>` in `main.tsx`; the ten product events POST to `/api/e`, an edge function (`api/e.ts`) relaying to a self-hosted Umami. Vercel Hobby supports no custom events, so the events go to Umami.
 - **The Umami address is `process.env.UMAMI_URL`, never committed** — this repo is mirrored publicly, and a redaction step you must remember is a step you will eventually forget. Set it in Vercel for Production AND Preview; unset, `/api/e` returns 503 and events stop silently. `api/` is in `tsconfig.json` include, so the function typechecks locally.
 - The function forwards `User-Agent` and `X-Forwarded-For` deliberately: Umami drops requests without a UA, and without the client IP every visitor collapses into one hash — wrong counts rather than absent ones.
 - **No Umami tracker script is loaded.** `/api/send` accepts a plain POST with no auth token, so `analytics.ts` posts directly. Keeps `script-src 'self'`, gives autocapture no surface to exist on, and leaves an ad blocker looking at a same-origin path — which matters when the audience is security admins.
@@ -121,15 +121,19 @@ npm run build     # Production build (Vite)
 - `isAnalyticsEnabled()` requires a browser: the endpoint is a relative path that cannot resolve outside one, which would break store tests
 - DNT and the About-dialog opt-out both gate emission; `beforeSend` extends the same switch to Vercel's page views. Without it one opt-out would silence Umami while page views continued — a test asserts both stop together
 - The allowlist and `public/privacy/index.html` are a matched pair — changing one requires changing the other
+- **`api/e.ts` holds a mirror of the allowlist and forwards a payload it builds itself**, never the caller's body — a public POST path is reachable without loading the page, so the client's allowlist alone guards nothing there. The website id is pinned. Mirrored, not imported: the function has no imports, so nothing the SPA pulls in can break its bundle. `analyticsRelay.test.ts` sends every event the client can emit through the relay, so a new event or value must be added in both files
+- **Never put a test file under `api/`** — Vercel deploys every file there as a function
 - `evaluate()` takes a REQUIRED `trigger` ('auto' | 'manual') so new call sites must declare intent — five paths exist and four are automatic
 - Never send verdicts, scenarios, or sweep findings — only that a run happened. `app_error` sends the kind, never the message (Graph/MSAL text names tenants)
 
 ### Security
-- `@odata.nextLink` URLs validated against `https://graph.microsoft.com/` before following with bearer token
+- The bearer token goes to `https://graph.microsoft.com/` only — checked in `resolveGraphUrl` (`graphClient.ts`), where the token is attached, so no caller can skip it; a refused URL throws before the request. `@odata.nextLink` is validated against the same prefix before it is followed
+- The app never validates or decodes a token, and must not: it is a public client, Graph is the resource server, and MSAL.js does not verify ID token signatures — ID token claims are display-only. A backend, if one is ever added, needs its own API registration and must validate signature, issuer, audience, tenant, scopes and calling app itself
 - 429 retry limited to 3 attempts (prevents infinite recursion)
 - User IDs validated as GUID format before Graph API path interpolation
 - All Zustand stores cleared before logout redirect
 - CSP: `frame-src 'self'` + `frame-ancestors 'self'` + `X-Frame-Options: SAMEORIGIN` for MSAL silent token renewal
+- CSP `script-src` is `'self'` with no third-party origin — Vercel Analytics loads `/_vercel/insights/script.js` from the same origin in production builds; `va.vercel-scripts.com` serves only its debug script
 - HSTS header: `max-age=63072000; includeSubDomains; preload`
 - sessionStorage for MSAL token cache (not localStorage)
 - Source maps disabled in production builds
@@ -150,11 +154,11 @@ npm run build     # Production build (Vite)
 
 ## Source of Truth
 
-`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-67).
+`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-74).
 
 ## Testing
 
-All 778 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, and the analytics allowlist. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
+All 834 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, the analytics allowlist, the analytics relay, and the Graph client's token destination. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport, relay upstream, Graph), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
 
 ## Impact Analysis Engine
 
@@ -182,7 +186,7 @@ All 778 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/service
 
 - `data/baselineChecks.ts` (23 checks, 6 categories incl. aiAgents) + `lib/baselineAssessment.ts` — OUTCOME-BASED: target scenarios must have the expected protection GUARANTEED (block satisfies everything; auth strength is tier-aware). An OR grant counts only if EVERY alternative satisfies the expectation — `[compliantDevice, domainJoinedDevice]` guarantees device trust, `[mfa, compliantDevice]` guarantees neither. Composite expectations (`device-trust-and-phishing-resistant-mfa`) are judged per part, each part by any applied policy (cross-policy AND).
 - **Slot-scoped checks** (`assessment.slot`) sweep ONLY the real account mapped into that persona slot — no synthetic persona, because the slot carries a role no account property reveals (Remote Help helper = Intune RBAC). Nothing mapped → status `unmapped`: in the status tally, outside every pass/total. Both Remote Help checks sweep Windows + macOS only (Microsoft supports CA for Remote Help there only; it does not apply to unattended access).
-- **Real personas run ALONGSIDE the synthetic ones** (`assessBaseline(policies, authStrengthMap, personas)`). The synthetic admin carries the GA role template id, no groups and no real object id, so nothing can exclude it — a policy that guarantees the control but excludes real admins passed 120/120 while the actual GA was uncovered. Class is derived from the account (`classifyPersona`), not the slot it sits in. Break-glass and service accounts are evaluated but partitioned out of the arithmetic entirely.
+- **Real personas run ALONGSIDE the synthetic ones** (`assessBaseline(policies, authStrengthMap, personas)`). The synthetic admin carries the GA role template id, no groups and no real object id, so nothing can exclude it. Real accounts show whether a policy that guarantees the control also reaches the admins it is meant for. Class is derived from the account (`classifyPersona`), not the slot it sits in. Break-glass and service accounts are evaluated but partitioned out of the arithmetic entirely.
 - Statuses: pass / reportOnly (promoting report-only policies would fix it) / partial / fail / unmapped (slot-scoped, nothing mapped — never run). Licensing unknowable → P2/Purview checks fail honestly with badges.
 - `data/templatePolicies.ts` — Fix-in-sandbox template bodies, static or factory (`(ctx) => body | null`); ALWAYS resolve via `resolveTemplate(checkId, ctx)`, never `.get()`. The operator template scopes itself to the mapped account (the tool cannot know the operators group) and the export marks it with a `deployNote`. Self-test loop: every template must satisfy its own check (`data/__tests__/templatePolicies.test.ts`), factories fed a fixture operator.
 - Agent checks sweep synthetic agent contexts (no personas, no device platform).
@@ -200,6 +204,8 @@ All 778 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/service
 - `data/microsoftServices.ts` — curated, DOC-SOURCED first-party resources; the single source of truth for their display names (`WELL_KNOWN_APPS` spreads it). Tenant app discovery filters Microsoft-owned SPs out, so these are otherwise unreachable, and `mergeApplicationSources` excludes their ids so they never double up in Tenant Apps.
 - `caTarget`: `selectable` | `filter-only` | `unsupported` — a property of ENTRA, not of the simulator. **Microsoft Graph is `unsupported`** (umbrella resource; the portal answers "Resource unsupported in Conditional Access"), **Azure AD Graph is `filter-only`**. The sandbox add-control offers ONLY `selectable` ones — drafting an exclusion the portal refuses would show an undeployable fix. Community-sourced app IDs never go in the list; the custom app ID field covers them.
 - The engine does NOT model `applicationFilter`, and never modelled the pre-June-2026 baseline-scope exemption (results match the new enforcement).
+- `data/sampleLessons.ts` — why a sample policy is shaped as it is, plus one thing to try. Rendered in `PolicyDetailPanel` in DEMO MODE ONLY (`dataSource === 'sample'`); a note on a real tenant's policy would be nonsense. 10 of 24 policies annotated on purpose — annotate one that teaches a hard-won lesson, leave ordinary policies plain. `sampleLessons.test.ts` pins the behavioural claims each note makes, same idea as the template self-test loop.
+- **Remote Help checks cover ATTENDED sessions only.** Live sign-in logs: an unattended session produces no Remote Assistance Service sign-in at all — client is `Windows App - Web`, resource is Microsoft Graph. A policy naming the service never sees it. Both checks sweep Windows + macOS, browser + modern clients (legacy is impossible for an OAuth app).
 - MSAL: `lib/authErrors.ts` `isSilentRenewalFailure()` treats `timed_out` / `iframe_closed_prematurely` like `InteractionRequiredAuthError` — a lapsed session makes the hidden iframe time out rather than answer. `main.tsx` renders NOTHING when `window.parent !== window` (MSAL's renewal iframe is same-origin); mounting the SPA there burns the 10s budget and inflates page views.
 
 ## Conventions

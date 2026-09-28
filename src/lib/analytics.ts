@@ -93,6 +93,9 @@ const BASELINE_CHECK_IDS: readonly string[] = BASELINE_CHECKS.map((c) => c.id);
  * The allowlist. Every emittable event name maps to its props, and every prop
  * maps to the complete set of values it may carry. This object IS the privacy
  * claim on the privacy page — keep the two in sync.
+ *
+ * api/e.ts holds a mirror, which the relay enforces on requests that never
+ * came from this module. analyticsRelay.test.ts fails when the two differ.
  */
 export const ALLOWED: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
   view_opened: { view: VIEWS, mode: MODES },
@@ -200,7 +203,7 @@ export function trackEvent(event: AppEvent): void {
   send(event.name, event.props);
 }
 
-/** Same-origin path; vercel.json rewrites it to our Umami instance. */
+/** Same-origin path; api/e.ts relays it to our Umami instance. */
 const ANALYTICS_ENDPOINT = '/api/e';
 
 /**
