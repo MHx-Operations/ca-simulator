@@ -1,10 +1,11 @@
 // api/e.ts — Analytics forwarder.
 //
 // The browser posts events to this same-origin path; this function relays them
-// to our Umami instance. It replaces a static rewrite in vercel.json, for one
-// reason: a rewrite has to name the destination in a committed file, and this
-// repo is mirrored publicly. Here the address is an environment variable, so it
-// is not in the repository at all and the mirror cannot leak it by omission.
+// to our Umami instance. It is a function and not a rewrite in vercel.json for
+// one reason: a rewrite has to name the destination in a committed file, and
+// this repo is mirrored publicly. Here the address is an environment variable,
+// so it is not in the repository at all and the mirror cannot leak it by
+// omission.
 //
 // The client contract is unchanged — src/lib/analytics.ts still posts to
 // /api/e, so the CSP still sees a same-origin request and there is still no

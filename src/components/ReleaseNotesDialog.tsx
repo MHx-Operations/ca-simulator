@@ -17,6 +17,16 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.36',
+    subtitle: 'Maintenance',
+    features: [
+      {
+        heading: 'Maintenance',
+        body: 'Internal checks in usage analytics and tidier documentation in the source code.',
+      },
+    ],
+  },
+  {
     version: 'v0.6.34',
     subtitle: 'Security review',
     features: [

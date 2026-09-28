@@ -19,10 +19,10 @@
 //   page views     -> Vercel Web Analytics, via <Analytics/> in main.tsx
 //   product events -> our own Umami instance, via send() below
 //
-// Vercel's Hobby plan supports no custom events, which is why the events below
-// never went anywhere until now. It does do page views well, so it keeps that
-// job; Umami takes the events. beforeSend() is what stops the two drifting
-// apart: without it, opting out would silence Umami while page views continued.
+// Vercel's Hobby plan supports no custom events. It does do page views well, so
+// it keeps that job; Umami takes the events. beforeSend() is what stops the two
+// drifting apart: without it, opting out would silence Umami while page views
+// continued.
 //
 // The Umami half posts to /api/e, a same-origin edge function (api/e.ts) that
 // relays to our instance. The address lives in the UMAMI_URL environment
@@ -115,8 +115,9 @@ export const ALLOWED: Readonly<Record<string, Readonly<Record<string, readonly s
  * directions so an extra prop (the leak vector) is rejected, not ignored.
  */
 export function isAllowed(name: string, props: Record<string, unknown>): boolean {
+  // Own keys only: 'constructor' is on every object and is not an event.
+  if (!Object.hasOwn(ALLOWED, name)) return false;
   const spec = ALLOWED[name];
-  if (!spec) return false;
 
   const expected = Object.keys(spec);
   const actual = Object.keys(props);

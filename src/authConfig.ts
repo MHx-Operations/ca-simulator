@@ -33,10 +33,9 @@ export const msalConfig = {
  * MSAL.js automatically adds OIDC scopes (openid, profile, email).
  *
  * Directory.Read.All covers users, groups, directory roles, role templates,
- * service principals, and applications — so the previously requested
- * User.Read.All / GroupMember.Read.All / Application.Read.All were redundant
- * consent surface. Policy.Read.All is still needed for CA policies, named
- * locations, and authentication strength policies.
+ * service principals, and applications, so User.Read.All, GroupMember.Read.All
+ * and Application.Read.All are not requested. Policy.Read.All is still needed
+ * for CA policies, named locations, and authentication strength policies.
  */
 export const loginRequest = {
   scopes: [

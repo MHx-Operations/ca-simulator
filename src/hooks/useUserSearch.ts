@@ -1,9 +1,9 @@
 // hooks/useUserSearch.ts — Shared debounced user search (sample + live mode).
 //
-// Replaces duplicated logic in ScenarioPanel and UserSearchInput. Handles the
-// async hazards of live-mode search:
+// Shared by ScenarioPanel and UserSearchInput. Handles the async hazards of
+// live-mode search:
 // - a monotonic request sequence drops stale responses (an older fetch
-//   resolving after a newer one can no longer overwrite the dropdown)
+//   resolving after a newer one cannot overwrite the dropdown)
 // - clearing/shortening the query invalidates in-flight requests
 // - pending debounce timers are cancelled on unmount
 

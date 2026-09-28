@@ -15,9 +15,8 @@ import {
  * `InteractionRequiredAuthError` is the tidy case: Entra answered and said so.
  * The timeouts are the same situation without an answer — when the Entra
  * session itself has lapsed, the hidden renewal iframe never receives a
- * response hash and MSAL gives up after its 10-second budget. Treating that as
- * a fatal error put a raw `timed_out` code in front of anyone returning to a
- * day-old tab, when what they needed was the sign-in page.
+ * response hash and MSAL gives up after its 10-second budget. Someone
+ * returning to a day-old tab needs the sign-in page, so both cases lead there.
  */
 export function isSilentRenewalFailure(error: unknown): boolean {
   if (error instanceof InteractionRequiredAuthError) return true;

@@ -74,6 +74,13 @@ describe('isAllowed — rejects anything outside the allowlist', () => {
     expect(isAllowed('', {})).toBe(false);
   });
 
+  it('rejects names that exist on every object', () => {
+    // Every object carries these; none of them is an event.
+    for (const name of ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__']) {
+      expect(isAllowed(name, {}), name).toBe(false);
+    }
+  });
+
   it('rejects free-form values in every event family', () => {
     expect(isAllowed('view_opened', { view: 'Finance Policies', mode: 'live' })).toBe(false);
     expect(isAllowed('source_chosen', { mode: 'contoso.onmicrosoft.com' })).toBe(false);

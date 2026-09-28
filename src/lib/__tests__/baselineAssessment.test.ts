@@ -675,8 +675,8 @@ describe('summaries', () => {
 // ── Real personas (v0.6.13) ──
 //
 // The synthetic admin carries the GA role template id, no group memberships and
-// no real object id, so a policy that guarantees the control but EXCLUDES real
-// admins passed every scenario. These cover the live-tenant case that exposed it.
+// no real object id, so nothing can exclude it. Real personas show whether a
+// policy that guarantees the control also reaches the real admins.
 
 const GA_ROLE = '62e90394-69f5-4237-9190-012177145e10';
 
@@ -688,7 +688,7 @@ const realAdmin: UserContext = {
   directoryRoleIds: [GA_ROLE],
 };
 
-/** Compliant device for everyone — the shape that produced the false pass. */
+/** Compliant device for everyone, with an optional exclusion. */
 const compliantForAll = (excludeUsers: string[] = []) =>
   createPolicy({
     id: 'mdm-compliant',
@@ -726,7 +726,7 @@ describe('assessBaseline with real personas', () => {
   });
 
   it('passes 120/120 for the synthetic admin even when the real admin is excluded', () => {
-    // The bug, pinned: without personas the exclusion is invisible.
+    // Without personas an exclusion is invisible.
     const check = getCheck(assessBaseline([compliantForAll([realAdmin.id])]), 'compliant-or-hybrid-admins');
     expect(check.status).toBe('pass');
     expect(check.scenariosPassed).toBe(check.scenariosTotal);

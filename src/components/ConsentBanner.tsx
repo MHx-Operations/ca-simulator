@@ -55,9 +55,9 @@ export function ConsentBanner() {
               policies, and either one can be missing.
             </p>
 
-            {/* Consent and a directory role are independent requirements. The
-                banner used to name only the first, so anyone holding the second
-                half of the problem was told to sign in again and saw no prompt. */}
+            {/* Consent and a directory role are independent requirements, and a
+                403 does not say which one is missing. The banner names both,
+                each with its own next step. */}
             <div className="text-sm space-y-2.5" style={{ color: COLORS.textMuted }}>
               <div className="space-y-1">
                 <p className="font-medium" style={{ color: COLORS.text }}>
