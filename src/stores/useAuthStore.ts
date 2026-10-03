@@ -10,7 +10,7 @@ import {
   EventType,
 } from '@azure/msal-browser';
 import type { EventMessage, AuthenticationResult, AccountInfo } from '@azure/msal-browser';
-import { msalConfig, loginRequest } from '../authConfig';
+import { buildMsalConfig, loginRequest } from '../authConfig';
 import { usePolicyStore } from './usePolicyStore';
 import { usePersonaStore } from './usePersonaStore';
 import { useEvaluationStore } from './useEvaluationStore';
@@ -62,7 +62,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     initPromise = (async () => {
       try {
-        const instance = new PublicClientApplication(msalConfig);
+        const instance = new PublicClientApplication(buildMsalConfig());
         await instance.initialize();
 
         // Register event callback BEFORE handleRedirectPromise to avoid
@@ -93,9 +93,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           accounts,
           isAuthenticated: accounts.length > 0,
         });
-      } catch (error) {
+      } catch {
+        // Fixed text: MSAL's initialization errors can quote the authority URL
+        // and correlation ids.
+        console.error('MSAL initialization failed');
         set({
-          authError: error instanceof Error ? error.message : 'MSAL initialization failed',
+          authError: 'Could not initialize sign-in. Check your network and try again.',
         });
       } finally {
         set({ isInitializing: false });

@@ -17,6 +17,16 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.38',
+    subtitle: 'Maintenance',
+    features: [
+      {
+        heading: 'Maintenance',
+        body: 'Choosing sample data while a tenant load is still running now keeps the sample data.',
+      },
+    ],
+  },
+  {
     version: 'v0.6.36',
     subtitle: 'Maintenance',
     features: [

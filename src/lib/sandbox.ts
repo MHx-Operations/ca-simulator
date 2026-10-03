@@ -92,6 +92,19 @@ export function applySandboxOverrides(
   });
 }
 
+/** True when any of the three sandbox maps holds a change. */
+export function hasSandboxChanges(
+  overrides: SandboxOverrides,
+  assignments: SandboxAssignments,
+  drafts: Record<string, ConditionalAccessPolicy>,
+): boolean {
+  return (
+    Object.keys(overrides).length > 0 ||
+    Object.keys(assignments).length > 0 ||
+    Object.keys(drafts).length > 0
+  );
+}
+
 /**
  * Applies state AND assignment overrides. Overridden policies become new
  * objects with new conditions.users / conditions.applications objects;

@@ -17,6 +17,7 @@ vi.mock('../../services/graphService', () => ({
 }));
 
 import { usePolicyStore } from '../usePolicyStore';
+import { fetchTenantName } from '../../services/graphService';
 
 // ── Helpers ──
 
@@ -391,5 +392,100 @@ describe('sandbox across data loads', () => {
     expect(s.sandboxActive).toBe(false);
     expect(s.sandboxOverrides).toEqual({});
     expect(s.effectivePolicies).toBe(s.policies);
+  });
+});
+
+describe('superseded loads', () => {
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
+
+  it('a live load that resolves after sample data was chosen is dropped', async () => {
+    const pending = deferred<ReturnType<typeof graphResult>>();
+    loadPoliciesFromGraphMock.mockReturnValue(pending.promise);
+
+    const load = usePolicyStore.getState().loadFromGraph();
+    expect(usePolicyStore.getState().isLoading).toBe(true);
+    usePolicyStore.getState().loadSampleData();
+    const samplePolicies = usePolicyStore.getState().policies;
+
+    pending.resolve(graphResult([createPolicy({ id: 'live-1' })]));
+    await load;
+
+    const s = usePolicyStore.getState();
+    expect(s.dataSource).toBe('sample');
+    expect(s.policies).toBe(samplePolicies);
+    expect(s.isLoading).toBe(false);
+  });
+
+  it('a live load that resolves after clear() writes nothing', async () => {
+    const pending = deferred<ReturnType<typeof graphResult>>();
+    loadPoliciesFromGraphMock.mockReturnValue(pending.promise);
+
+    const load = usePolicyStore.getState().loadFromGraph();
+    usePolicyStore.getState().clear();
+    expect(usePolicyStore.getState().isLoading).toBe(false);
+
+    pending.resolve(graphResult([createPolicy({ id: 'live-1' })]));
+    await load;
+
+    const s = usePolicyStore.getState();
+    expect(s.dataSource).toBe('none');
+    expect(s.policies).toEqual([]);
+    expect(s.tenantName).toBeNull();
+  });
+
+  it('of two live loads, the later one wins even when the earlier resolves last', async () => {
+    const first = deferred<ReturnType<typeof graphResult>>();
+    const second = deferred<ReturnType<typeof graphResult>>();
+    loadPoliciesFromGraphMock.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+    const loadA = usePolicyStore.getState().loadFromGraph();
+    const loadB = usePolicyStore.getState().loadFromGraph();
+
+    second.resolve(graphResult([createPolicy({ id: 'newer' })]));
+    await loadB;
+    first.resolve(graphResult([createPolicy({ id: 'older' })]));
+    await loadA;
+
+    const s = usePolicyStore.getState();
+    expect(s.policies.map((p) => p.id)).toEqual(['newer']);
+    expect(s.isLoading).toBe(false);
+  });
+
+  it('a superseded load that fails does not set an error', async () => {
+    const pending = deferred<ReturnType<typeof graphResult>>();
+    loadPoliciesFromGraphMock.mockReturnValue(pending.promise);
+
+    const load = usePolicyStore.getState().loadFromGraph();
+    usePolicyStore.getState().loadSampleData();
+
+    pending.reject(new Error('Graph failed'));
+    await load;
+
+    const s = usePolicyStore.getState();
+    expect(s.error).toBeNull();
+    expect(s.dataSource).toBe('sample');
+  });
+
+  it('a tenant name that arrives after clear() is dropped', async () => {
+    const pending = deferred<string | null>();
+    vi.mocked(fetchTenantName).mockReturnValueOnce(pending.promise);
+
+    const load = usePolicyStore.getState().loadTenantName();
+    // Let getAccessToken resolve so fetchTenantName is actually called.
+    await Promise.resolve();
+    usePolicyStore.getState().clear();
+
+    pending.resolve('Contoso');
+    await load;
+
+    expect(usePolicyStore.getState().tenantName).toBeNull();
   });
 });

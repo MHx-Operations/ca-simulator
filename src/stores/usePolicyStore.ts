@@ -75,6 +75,13 @@ function computeEffectivePolicies(
   return [...applySandboxEdits(policies, overrides, assignments), ...draftList];
 }
 
+// Load generation. A Graph load can still be in flight when the user picks
+// sample data, refreshes again or signs out; its result must not land on top
+// of whatever replaced it. Every live load takes a new generation, and sample
+// loads and clear() advance it, so a load whose generation has moved on drops
+// its result.
+let loadGeneration = 0;
+
 export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   policies: [],
   namedLocations: new Map(),
@@ -93,8 +100,12 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   effectivePolicies: [],
 
   loadTenantName: async () => {
+    // Reads the generation without advancing it: this background call must
+    // not invalidate a policy load running beside it.
+    const gen = loadGeneration;
     const token = await getAccessToken();
     const name = await fetchTenantName(token);
+    if (gen !== loadGeneration) return;
     if (name) set({ tenantName: name });
   },
 
@@ -102,6 +113,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     // Three components can load each source, so this lives here rather than at
     // the buttons. Gated on an actual change so a refresh isn't a new choice.
     if (get().dataSource !== 'live') trackEvent({ name: 'source_chosen', props: { mode: 'live' } });
+    const gen = ++loadGeneration;
     set({ isLoading: true, error: null });
     try {
       const token = await getAccessToken();
@@ -109,6 +121,9 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
         loadPoliciesFromGraph(token),
         fetchTenantName(token),
       ]);
+      // Superseded while in flight. The action that replaced this load owns
+      // isLoading, so nothing is written here.
+      if (gen !== loadGeneration) return;
       // Refreshing the same source keeps sandbox changes (pruned against the
       // new policy list); switching sources starts with a clean sandbox.
       const isRefresh = get().dataSource === 'live';
@@ -139,6 +154,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       });
       trackEvent({ name: 'load_outcome', props: { outcome: 'ok' } });
     } catch (error) {
+      if (gen !== loadGeneration) return;
       // The outcome is an enum, never the message — Graph errors carry tenant detail
       const isConsent =
         error instanceof GraphPermissionError ||
@@ -152,6 +168,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   },
 
   loadSampleData: () => {
+    loadGeneration += 1;
     if (get().dataSource !== 'sample') trackEvent({ name: 'source_chosen', props: { mode: 'sample' } });
     const displayNames = new Map<string, string>();
     for (const [id, name] of Object.entries(SAMPLE_DISPLAY_NAMES)) {
@@ -191,6 +208,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   },
 
   clear: () => {
+    loadGeneration += 1;
     set({
       policies: [],
       namedLocations: new Map(),
@@ -198,6 +216,8 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       authStrengthMap: new Map(),
       tenantApplications: [],
       tenantName: null,
+      // A load dropped by the generation check above never clears its spinner.
+      isLoading: false,
       error: null,
       dataSource: 'none',
       sandboxActive: false,

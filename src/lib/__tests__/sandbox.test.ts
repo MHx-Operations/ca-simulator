@@ -8,6 +8,7 @@ import {
   pruneSandboxAssignments,
   sameMembers,
   getAssignmentField,
+  hasSandboxChanges,
 } from '../sandbox';
 import type { ConditionalAccessPolicy, PolicyConditions } from '@/engine/models/Policy';
 
@@ -280,5 +281,20 @@ describe('pruneSandboxOverrides', () => {
     const policies = [createPolicy({ id: 'p1' })];
 
     expect(pruneSandboxOverrides(policies, {})).toEqual({});
+  });
+});
+
+describe('hasSandboxChanges', () => {
+  it('is false when all three maps are empty', () => {
+    expect(hasSandboxChanges({}, {}, {})).toBe(false);
+  });
+
+  it('is true for a state override or an assignment override', () => {
+    expect(hasSandboxChanges({ p1: 'disabled' }, {}, {})).toBe(true);
+    expect(hasSandboxChanges({}, { p1: { excludeUsers: ['u1'] } }, {})).toBe(true);
+  });
+
+  it('is true for a draft alone', () => {
+    expect(hasSandboxChanges({}, {}, { d1: createPolicy({ id: 'd1' }) })).toBe(true);
   });
 });

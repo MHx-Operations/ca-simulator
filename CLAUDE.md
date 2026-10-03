@@ -10,7 +10,7 @@ Microsoft Entra ID Conditional Access policy simulator. TypeScript engine + Reac
 - **Framework:** React 18 + Vite
 - **Testing:** Vitest (`npm test` runs all tests)
 - **UI:** Shadcn/UI (Radix primitives) + Tailwind CSS v4 (`@tailwindcss/vite` plugin, no tailwind.config.js)
-- **State:** Zustand (3 stores: usePolicyStore, usePersonaStore, useEvaluationStore). useEvaluationStore.activeView controls tab selection ('grid' | 'matrix' | 'sankey' | 'gaps' | 'impact' | 'baseline'). usePersonaStore owns `personaSlots` — the guided real-account mapping shared by Gaps and Baseline (six slots; the sixth, Remote Help Operator, is a *role* slot the classifier cannot derive); it lives in the store, not a view, so a mapping survives a tab switch, and `clear()` wipes it on logout and source switch.
+- **State:** Zustand (3 stores: usePolicyStore, usePersonaStore, useEvaluationStore). useEvaluationStore.activeView controls tab selection ('grid' | 'matrix' | 'sankey' | 'gaps' | 'impact' | 'baseline'). usePersonaStore owns `personaSlots` — the guided real-account mapping shared by Gaps and Baseline (six slots; the sixth, Remote Help Operator, is a *role* slot the classifier cannot derive); it lives in the store, not a view, so a mapping survives a tab switch, and `clear()` wipes it on logout and source switch. usePolicyStore keeps a load generation: a Graph load superseded by a newer load, a sample load or `clear()` writes nothing.
 - **Auth:** MSAL.js (`@azure/msal-react`), loginRedirect flow
 - **Visualization:** D3 (d3-sankey, d3-selection) for Sankey diagram, CSS Grid for policy tiles
 - **Font:** JetBrains Mono (Google Fonts)
@@ -64,7 +64,7 @@ src/
 ## Key Commands
 
 ```bash
-npm test          # Run all engine tests (835 tests, Vitest)
+npm test          # Run all engine tests (845 tests, Vitest)
 npm run dev       # Start dev server (localhost:5173)
 npm run build     # Production build (Vite)
 ```
@@ -154,11 +154,11 @@ npm run build     # Production build (Vite)
 
 ## Source of Truth
 
-`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-74).
+`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-75).
 
 ## Testing
 
-All 835 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, the analytics allowlist, the analytics relay, and the Graph client's token destination. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport, relay upstream, Graph), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
+All 845 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, the analytics allowlist, the analytics relay, and the Graph client's token destination. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport, relay upstream, Graph), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
 
 ## Impact Analysis Engine
 
