@@ -19,10 +19,10 @@
 //   page views     -> Vercel Web Analytics, via <Analytics/> in main.tsx
 //   product events -> our own Umami instance, via send() below
 //
-// Vercel's Hobby plan supports no custom events, which is why the events below
-// never went anywhere until now. It does do page views well, so it keeps that
-// job; Umami takes the events. beforeSend() is what stops the two drifting
-// apart: without it, opting out would silence Umami while page views continued.
+// Vercel's Hobby plan supports no custom events. It does do page views well, so
+// it keeps that job; Umami takes the events. beforeSend() is what stops the two
+// drifting apart: without it, opting out would silence Umami while page views
+// continued.
 //
 // The Umami half posts to /api/e, a same-origin edge function (api/e.ts) that
 // relays to our instance. The address lives in the UMAMI_URL environment
@@ -93,6 +93,9 @@ const BASELINE_CHECK_IDS: readonly string[] = BASELINE_CHECKS.map((c) => c.id);
  * The allowlist. Every emittable event name maps to its props, and every prop
  * maps to the complete set of values it may carry. This object IS the privacy
  * claim on the privacy page — keep the two in sync.
+ *
+ * api/e.ts holds a mirror, which the relay enforces on requests that never
+ * came from this module. analyticsRelay.test.ts fails when the two differ.
  */
 export const ALLOWED: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = {
   view_opened: { view: VIEWS, mode: MODES },
@@ -112,8 +115,9 @@ export const ALLOWED: Readonly<Record<string, Readonly<Record<string, readonly s
  * directions so an extra prop (the leak vector) is rejected, not ignored.
  */
 export function isAllowed(name: string, props: Record<string, unknown>): boolean {
+  // Own keys only: 'constructor' is on every object and is not an event.
+  if (!Object.hasOwn(ALLOWED, name)) return false;
   const spec = ALLOWED[name];
-  if (!spec) return false;
 
   const expected = Object.keys(spec);
   const actual = Object.keys(props);
@@ -200,7 +204,7 @@ export function trackEvent(event: AppEvent): void {
   send(event.name, event.props);
 }
 
-/** Same-origin path; vercel.json rewrites it to our Umami instance. */
+/** Same-origin path; api/e.ts relays it to our Umami instance. */
 const ANALYTICS_ENDPOINT = '/api/e';
 
 /**

@@ -167,8 +167,7 @@ describe('describeSandboxChanges', () => {
 
   it("special values resolve per field kind — user-list 'All' never borrows the app label", () => {
     // The shared displayNames map seeds 'All' → 'All Cloud Apps' for app views;
-    // that must not leak into user-list labels (regression: "Included users:
-    // added All Cloud Apps").
+    // that must not leak into user-list labels, where 'All' means all users.
     const pollutedNames = new Map([['All', 'All Cloud Apps']]);
     const policy = createPolicy({
       id: 'p1',

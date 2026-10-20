@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { usePolicyStore } from '@/stores/usePolicyStore';
+import { hasSandboxChanges } from '@/lib/sandbox';
 import { CAEngine } from '@/engine/CAEngine';
 import { describeVerdict } from '@/lib/impactAnalysis';
 import { getMicrosoftService } from '@/data/microsoftServices';
@@ -77,11 +78,7 @@ export function ResultsSummary() {
   // With sandbox changes active, the displayed result reflects the sandbox set;
   // also evaluate the live set so the banner can show what the tenant does today.
   const liveResult = useMemo(() => {
-    const hasChanges =
-      Object.keys(sandboxOverrides).length > 0 ||
-      Object.keys(sandboxAssignments).length > 0 ||
-      Object.keys(sandboxDrafts).length > 0;
-    if (!sandboxActive || !hasChanges || !lastContext) {
+    if (!sandboxActive || !hasSandboxChanges(sandboxOverrides, sandboxAssignments, sandboxDrafts) || !lastContext) {
       return null;
     }
     return new CAEngine().evaluate(livePolicies, lastContext);

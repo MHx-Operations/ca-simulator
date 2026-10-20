@@ -5,6 +5,7 @@ import { Beaker, RotateCcw, GitCompareArrows, Download } from 'lucide-react';
 import { COLORS } from '@/data/theme';
 import { Button } from '@/components/ui/button';
 import { usePolicyStore } from '@/stores/usePolicyStore';
+import { hasSandboxChanges } from '@/lib/sandbox';
 
 export function SandboxBar({
   onViewDiff,
@@ -90,11 +91,7 @@ export function SandboxChip() {
   const sandboxDrafts = usePolicyStore((s) => s.sandboxDrafts);
 
   if (!sandboxActive) return null;
-  if (
-    Object.keys(sandboxOverrides).length === 0 &&
-    Object.keys(sandboxAssignments).length === 0 &&
-    Object.keys(sandboxDrafts).length === 0
-  ) return null;
+  if (!hasSandboxChanges(sandboxOverrides, sandboxAssignments, sandboxDrafts)) return null;
 
   return (
     <span

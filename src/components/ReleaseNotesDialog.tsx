@@ -17,6 +17,36 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.38',
+    subtitle: 'Maintenance',
+    features: [
+      {
+        heading: 'Maintenance',
+        body: 'Choosing sample data while a tenant load is still running now keeps the sample data.',
+      },
+    ],
+  },
+  {
+    version: 'v0.6.36',
+    subtitle: 'Maintenance',
+    features: [
+      {
+        heading: 'Maintenance',
+        body: 'Internal checks in usage analytics and tidier documentation in the source code.',
+      },
+    ],
+  },
+  {
+    version: 'v0.6.34',
+    subtitle: 'Security review',
+    features: [
+      {
+        heading: 'Security Review',
+        body: "The simulator was reviewed against Microsoft's guidance on access tokens and claims validation. That guidance places validation with the API that receives a token, and the simulator has always worked that way: sign-in runs through Microsoft's own library, and policies are read directly from Microsoft Graph. The review added internal checks around requests and usage events.",
+      },
+    ],
+  },
+  {
     version: 'v0.6.26',
     subtitle: 'Remote Help accuracy',
     features: [

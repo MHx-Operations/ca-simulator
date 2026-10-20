@@ -1,9 +1,8 @@
 // data/__tests__/sampleData.test.ts — Sample tenant consistency.
 //
 // Every id a sample policy references must resolve to a display name, or the
-// UI renders a truncated id — which is how CA002's Sam Chen exclusion read
-// until the persona names were added to the map. Special values resolve
-// before the name map and are exempt.
+// UI renders a truncated id. Special values resolve before the name map and
+// are exempt.
 
 import { describe, it, expect } from 'vitest';
 import { SAMPLE_POLICIES, SAMPLE_DISPLAY_NAMES } from '../samplePolicies';

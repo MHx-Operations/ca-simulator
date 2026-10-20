@@ -221,14 +221,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           authError: null,
         });
       } catch {
-        // Fixed text only: the authority now embeds the tenant id, and MSAL's
-        // endpoint-resolution and network errors quote the authority URL in
-        // their message — which must reach neither the banner nor the console
-        // from here. (MSAL's own logger relay in authConfig.ts redacts the
-        // tenant id from the lines it forwards.)
+        // Fixed text: MSAL's initialization errors can quote the authority URL
+        // and correlation ids.
         console.error('MSAL initialization failed');
         set({
-          authError: 'Could not initialize sign-in for the selected tenant. Check your network and try again.',
+          authError: 'Could not initialize sign-in. Check your network and try again.',
         });
       } finally {
         set({ isInitializing: false });

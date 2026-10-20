@@ -22,6 +22,21 @@ const MAX_RETRIES = 3;
 const DEFAULT_RETRY_AFTER_S = 5;
 const MAX_RETRY_AFTER_S = 60;
 
+// The trailing slash is what makes this a host check: without it,
+// graph.microsoft.com.example.net would share the prefix.
+const GRAPH_ORIGIN = 'https://graph.microsoft.com/';
+
+/**
+ * The URL a bearer token is about to be sent to. Absolute URLs are accepted
+ * (the beta endpoint, @odata.nextLink) but only on Graph's own host — checked
+ * here, where the token is attached, so no caller can skip it.
+ */
+function resolveGraphUrl(endpoint: string): string {
+  if (!endpoint.startsWith('https://')) return `${GRAPH_ORIGIN}v1.0${endpoint}`;
+  if (!endpoint.startsWith(GRAPH_ORIGIN)) throw new Error('Untrusted Graph URL');
+  return endpoint;
+}
+
 /**
  * Parse a Retry-After header (delta-seconds or HTTP-date per RFC 9110) into a
  * bounded number of seconds. Unparseable values fall back to the default —
@@ -46,9 +61,7 @@ function sleepForRetry(response: Response): Promise<void> {
 }
 
 export async function graphFetch<T>(endpoint: string, token: string, extraHeaders?: Record<string, string>, _retryCount = 0): Promise<T> {
-  const url = endpoint.startsWith('https://')
-    ? endpoint
-    : `https://graph.microsoft.com/v1.0${endpoint}`;
+  const url = resolveGraphUrl(endpoint);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -76,7 +89,7 @@ export async function graphPost<T>(endpoint: string, token: string, body: unknow
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const response = await fetch(`https://graph.microsoft.com/v1.0${endpoint}`, {
+    const response = await fetch(resolveGraphUrl(endpoint), {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${token}`,
@@ -121,7 +134,7 @@ export async function fetchAllPages<T>(endpoint: string, token: string, extraHea
     const page: GraphPagedResponse<T> = await graphFetch<GraphPagedResponse<T>>(url, token, extraHeaders);
     results.push(...page.value);
     const nextLink = page['@odata.nextLink'];
-    if (nextLink && !nextLink.startsWith('https://graph.microsoft.com/')) {
+    if (nextLink && !nextLink.startsWith(GRAPH_ORIGIN)) {
       throw new Error('Untrusted @odata.nextLink URL');
     }
     url = nextLink;

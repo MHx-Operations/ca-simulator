@@ -75,12 +75,11 @@ function computeEffectivePolicies(
   return [...applySandboxEdits(policies, overrides, assignments), ...draftList];
 }
 
-// Load generation. A tenant switch no longer unloads the page, so two loads
-// can be alive at once and the later-resolving one would win — landing the
-// previous tenant's policies under the new tenant's name. Every load stamps
-// itself here and drops its result if the stamp moved on; clear() (which every
-// switch and logout runs) and each new load bump it. Kept as a counter rather
-// than a tenant comparison so this store stays free of a useAuthStore import.
+// Load generation. A Graph load can still be in flight when the user picks
+// sample data, refreshes again or signs out; its result must not land on top
+// of whatever replaced it. Every live load takes a new generation, and sample
+// loads and clear() advance it, so a load whose generation has moved on drops
+// its result.
 let loadGeneration = 0;
 
 export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
@@ -101,9 +100,8 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   effectivePolicies: [],
 
   loadTenantName: async () => {
-    // Observes the generation without bumping it: this call is a background
-    // read (the header effect) and must not invalidate a policy load running
-    // beside it. Its own result is dropped when a switch or a load intervened.
+    // Reads the generation without advancing it: this background call must
+    // not invalidate a policy load running beside it.
     const gen = loadGeneration;
     const token = await getAccessToken();
     const name = await fetchTenantName(token);
@@ -123,10 +121,8 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
         loadPoliciesFromGraph(token),
         fetchTenantName(token),
       ]);
-      // Stale: a newer load, a tenant switch or a logout happened while this
-      // was in flight. Returning before the set() leaves isLoading to the load
-      // that superseded this one — writing it here would clear the spinner of
-      // a load still running.
+      // Superseded while in flight. The action that replaced this load owns
+      // isLoading, so nothing is written here.
       if (gen !== loadGeneration) return;
       // Refreshing the same source keeps sandbox changes (pruned against the
       // new policy list); switching sources starts with a clean sandbox.
@@ -172,6 +168,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   },
 
   loadSampleData: () => {
+    loadGeneration += 1;
     if (get().dataSource !== 'sample') trackEvent({ name: 'source_chosen', props: { mode: 'sample' } });
     const displayNames = new Map<string, string>();
     for (const [id, name] of Object.entries(SAMPLE_DISPLAY_NAMES)) {
@@ -211,8 +208,6 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   },
 
   clear: () => {
-    // Invalidates every in-flight load: a switch that starts no new load (the
-    // sample-mode path) must still drop the previous tenant's pending results.
     loadGeneration += 1;
     set({
       policies: [],
@@ -221,9 +216,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       authStrengthMap: new Map(),
       tenantApplications: [],
       tenantName: null,
-      // A load invalidated above returns without writing isLoading (the load
-      // that superseded it owns the spinner); when nothing supersedes it, this
-      // is what puts the spinner back down.
+      // A load dropped by the generation check above never clears its spinner.
       isLoading: false,
       error: null,
       dataSource: 'none',

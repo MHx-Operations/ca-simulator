@@ -244,32 +244,6 @@ describe('applySandboxEdits — agent fields', () => {
   });
 });
 
-describe('hasSandboxChanges', () => {
-  it('returns false when all three maps are empty', () => {
-    expect(hasSandboxChanges({}, {}, {})).toBe(false);
-  });
-
-  it('returns true when only sandboxOverrides has an entry', () => {
-    expect(hasSandboxChanges({ p1: 'disabled' }, {}, {})).toBe(true);
-  });
-
-  it('returns true when only sandboxAssignments has an entry', () => {
-    expect(hasSandboxChanges({}, { p1: { excludeUsers: ['u1'] } }, {})).toBe(true);
-  });
-
-  it('returns true when only sandboxDrafts has an entry', () => {
-    const draft = createPolicy({ id: 'p1' });
-    expect(hasSandboxChanges({}, {}, { p1: draft })).toBe(true);
-  });
-
-  it('returns true when multiple maps have entries', () => {
-    const draft = createPolicy({ id: 'p2' });
-    expect(
-      hasSandboxChanges({ p1: 'disabled' }, { p1: { excludeUsers: ['u1'] } }, { p2: draft }),
-    ).toBe(true);
-  });
-});
-
 describe('pruneSandboxOverrides', () => {
   it('drops overrides for policies that no longer exist', () => {
     const policies = [createPolicy({ id: 'p1', state: 'enabled' })];
@@ -307,5 +281,20 @@ describe('pruneSandboxOverrides', () => {
     const policies = [createPolicy({ id: 'p1' })];
 
     expect(pruneSandboxOverrides(policies, {})).toEqual({});
+  });
+});
+
+describe('hasSandboxChanges', () => {
+  it('is false when all three maps are empty', () => {
+    expect(hasSandboxChanges({}, {}, {})).toBe(false);
+  });
+
+  it('is true for a state override or an assignment override', () => {
+    expect(hasSandboxChanges({ p1: 'disabled' }, {}, {})).toBe(true);
+    expect(hasSandboxChanges({}, { p1: { excludeUsers: ['u1'] } }, {})).toBe(true);
+  });
+
+  it('is true for a draft alone', () => {
+    expect(hasSandboxChanges({}, {}, { d1: createPolicy({ id: 'd1' }) })).toBe(true);
   });
 });

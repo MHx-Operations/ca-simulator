@@ -11,13 +11,13 @@ vi.mock('../../services/auth', () => ({
 }));
 
 const loadPoliciesFromGraphMock = vi.fn();
-const fetchTenantNameMock = vi.fn();
 vi.mock('../../services/graphService', () => ({
   loadPoliciesFromGraph: (...args: unknown[]) => loadPoliciesFromGraphMock(...args),
-  fetchTenantName: (...args: unknown[]) => fetchTenantNameMock(...args),
+  fetchTenantName: vi.fn(async () => 'Contoso'),
 }));
 
 import { usePolicyStore } from '../usePolicyStore';
+import { fetchTenantName } from '../../services/graphService';
 
 // ── Helpers ──
 
@@ -76,8 +76,6 @@ function seedLive(policies: ConditionalAccessPolicy[]) {
 beforeEach(() => {
   usePolicyStore.setState(initialState, true);
   loadPoliciesFromGraphMock.mockReset();
-  fetchTenantNameMock.mockReset();
-  fetchTenantNameMock.mockResolvedValue('Contoso');
 });
 
 describe('sandbox overrides', () => {
@@ -397,70 +395,96 @@ describe('sandbox across data loads', () => {
   });
 });
 
-// ── Stale in-flight loads ──
-//
-// A tenant switch no longer unloads the page, so a load started for the
-// previous tenant can still be in flight when the new tenant's data is
-// already on screen. The later-resolving load must not win.
-describe('stale load results', () => {
-  // Lets the in-flight load reach its awaited Graph call before the switch
-  // clears the store — otherwise the fake resolver is not wired up yet.
-  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+describe('superseded loads', () => {
+  function deferred<T>() {
+    let resolve!: (value: T) => void;
+    let reject!: (reason: unknown) => void;
+    const promise = new Promise<T>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    return { promise, resolve, reject };
+  }
 
-  it('discards a load that resolves after clear()', async () => {
-    let finishLoad!: (result: ReturnType<typeof graphResult>) => void;
-    loadPoliciesFromGraphMock.mockImplementationOnce(
-      () => new Promise((resolve) => { finishLoad = resolve; }),
-    );
+  it('a live load that resolves after sample data was chosen is dropped', async () => {
+    const pending = deferred<ReturnType<typeof graphResult>>();
+    loadPoliciesFromGraphMock.mockReturnValue(pending.promise);
 
-    const stale = usePolicyStore.getState().loadFromGraph();
+    const load = usePolicyStore.getState().loadFromGraph();
+    expect(usePolicyStore.getState().isLoading).toBe(true);
+    usePolicyStore.getState().loadSampleData();
+    const samplePolicies = usePolicyStore.getState().policies;
 
-    // The switch: every store is cleared, then the new tenant's data lands.
-    usePolicyStore.getState().clear();
-    loadPoliciesFromGraphMock.mockResolvedValue(graphResult([createPolicy({ id: 'new-tenant-policy' })]));
-    await usePolicyStore.getState().loadFromGraph();
-
-    finishLoad(graphResult([createPolicy({ id: 'old-tenant-policy' })]));
-    await stale;
+    pending.resolve(graphResult([createPolicy({ id: 'live-1' })]));
+    await load;
 
     const s = usePolicyStore.getState();
-    expect(s.policies.map((p) => p.id)).toEqual(['new-tenant-policy']);
-    expect(s.effectivePolicies.map((p) => p.id)).toEqual(['new-tenant-policy']);
-    expect(s.dataSource).toBe('live');
+    expect(s.dataSource).toBe('sample');
+    expect(s.policies).toBe(samplePolicies);
     expect(s.isLoading).toBe(false);
   });
 
-  it('discards a failing load that rejects after clear(), leaving no stale error', async () => {
-    let failLoad!: (error: Error) => void;
-    loadPoliciesFromGraphMock.mockImplementationOnce(
-      () => new Promise((_resolve, reject) => { failLoad = reject; }),
-    );
+  it('a live load that resolves after clear() writes nothing', async () => {
+    const pending = deferred<ReturnType<typeof graphResult>>();
+    loadPoliciesFromGraphMock.mockReturnValue(pending.promise);
 
-    const stale = usePolicyStore.getState().loadFromGraph();
-    await settle();
+    const load = usePolicyStore.getState().loadFromGraph();
     usePolicyStore.getState().clear();
+    expect(usePolicyStore.getState().isLoading).toBe(false);
 
-    failLoad(new Error('previous tenant graph failure'));
-    await stale;
+    pending.resolve(graphResult([createPolicy({ id: 'live-1' })]));
+    await load;
+
+    const s = usePolicyStore.getState();
+    expect(s.dataSource).toBe('none');
+    expect(s.policies).toEqual([]);
+    expect(s.tenantName).toBeNull();
+  });
+
+  it('of two live loads, the later one wins even when the earlier resolves last', async () => {
+    const first = deferred<ReturnType<typeof graphResult>>();
+    const second = deferred<ReturnType<typeof graphResult>>();
+    loadPoliciesFromGraphMock.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+    const loadA = usePolicyStore.getState().loadFromGraph();
+    const loadB = usePolicyStore.getState().loadFromGraph();
+
+    second.resolve(graphResult([createPolicy({ id: 'newer' })]));
+    await loadB;
+    first.resolve(graphResult([createPolicy({ id: 'older' })]));
+    await loadA;
+
+    const s = usePolicyStore.getState();
+    expect(s.policies.map((p) => p.id)).toEqual(['newer']);
+    expect(s.isLoading).toBe(false);
+  });
+
+  it('a superseded load that fails does not set an error', async () => {
+    const pending = deferred<ReturnType<typeof graphResult>>();
+    loadPoliciesFromGraphMock.mockReturnValue(pending.promise);
+
+    const load = usePolicyStore.getState().loadFromGraph();
+    usePolicyStore.getState().loadSampleData();
+
+    pending.reject(new Error('Graph failed'));
+    await load;
 
     const s = usePolicyStore.getState();
     expect(s.error).toBeNull();
-    expect(s.isLoading).toBe(false);
-    expect(s.dataSource).toBe('none');
+    expect(s.dataSource).toBe('sample');
   });
 
-  it('drops a tenant name that resolves after clear()', async () => {
-    let finishName!: (name: string) => void;
-    fetchTenantNameMock.mockImplementationOnce(
-      () => new Promise((resolve) => { finishName = resolve; }),
-    );
+  it('a tenant name that arrives after clear() is dropped', async () => {
+    const pending = deferred<string | null>();
+    vi.mocked(fetchTenantName).mockReturnValueOnce(pending.promise);
 
-    const stale = usePolicyStore.getState().loadTenantName();
-    await settle();
+    const load = usePolicyStore.getState().loadTenantName();
+    // Let getAccessToken resolve so fetchTenantName is actually called.
+    await Promise.resolve();
     usePolicyStore.getState().clear();
 
-    finishName('Previous Tenant');
-    await stale;
+    pending.resolve('Contoso');
+    await load;
 
     expect(usePolicyStore.getState().tenantName).toBeNull();
   });

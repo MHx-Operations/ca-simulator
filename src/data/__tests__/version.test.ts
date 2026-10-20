@@ -1,10 +1,7 @@
 // version.test.ts — APP_VERSION and package.json must move together.
 //
-// They are two halves of one release step, and they drifted on v0.6.16:
-// APP_VERSION was bumped and package.json was not. Nothing caught it, because
-// nothing reads both — until scripts/sync-public.mjs, which names the public
-// mirror's commit from package.json and would have pushed a second commit
-// called v0.6.14.
+// They are two halves of one release step, and nothing else reads both. The
+// public mirror's commit is named from package.json, so the two have to agree.
 //
 // package.json is imported rather than read from disk: resolveJsonModule is
 // already on, and this project deliberately carries no @types/node, so the

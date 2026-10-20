@@ -376,7 +376,7 @@ describe('useAuthStore.initializeMsal', () => {
     await useAuthStore.getState().initializeMsal(TENANT_A);
 
     const { authError, msalInstance, isInitialized, isInitializing } = useAuthStore.getState();
-    expect(authError).toBe('Could not initialize sign-in for the selected tenant. Check your network and try again.');
+    expect(authError).toBe('Could not initialize sign-in. Check your network and try again.');
     expect(authError).not.toContain(TENANT_A.tenantId);
     expect(msalInstance).toBeNull();
     expect(isInitialized).toBe(false);
@@ -422,7 +422,7 @@ describe('useAuthStore.initializeMsal', () => {
     const line = String(consoleError.mock.calls[0][0]);
     expect(line).toContain('invalid_grant');
     expect(line).not.toContain(TENANT_B.tenantId);
-    expect(line).toContain('<tenant>');
+    expect(line).toContain('<id>');
     consoleError.mockRestore();
   });
 

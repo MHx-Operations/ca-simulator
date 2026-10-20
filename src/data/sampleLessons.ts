@@ -1,9 +1,8 @@
 // data/sampleLessons.ts — What the sample tenant is trying to teach.
 //
 // The sample policies are not a random tenant: several carry a deliberate flaw
-// or a deliberate subtlety, and until now that intent lived only in code
-// comments. These notes put it on the policy itself, in demo mode only, where
-// someone exploring will actually meet it.
+// or a deliberate subtlety. These notes put that intent on the policy itself,
+// in demo mode only, where someone exploring will actually meet it.
 //
 // A note earns its place by naming something you can DO and what to watch —
 // the sandbox makes every one of them reversible in two clicks.
