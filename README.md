@@ -2,6 +2,12 @@
 
 A Conditional Access policy simulator for Microsoft Entra ID. Evaluate sign-in scenarios — including Entra Agent ID agent identities — against real or sample CA policies, experiment safely in a sandbox, assess against Microsoft's baseline recommendations, and export deployment-ready change plans.
 
+> **Community fork.** This repository is a maintained fork of
+> [haakonwibe/ca-simulator](https://github.com/haakonwibe/ca-simulator). It adds a
+> tenant switcher for consultants and MSPs who manage several tenants (see
+> [Multiple tenants](#multiple-tenants)) and otherwise follows upstream release by
+> release. Report simulator issues upstream and tenant-switcher issues here.
+
 <p align="center">
   <img src="docs/screenshots/grid-view.png" width="32%" alt="Grid View" />
   <img src="docs/screenshots/matrix-view.png" width="32%" alt="Matrix View" />
