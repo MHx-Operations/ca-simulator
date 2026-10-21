@@ -1,9 +1,10 @@
 name: Upstream check
 
-# Looks for new upstream releases once a week and opens a pull request that
-# carries the upstream commits, so the merge (and any conflicts) is visible
-# on GitHub and CI can run on it. Resolving happens locally; see the fork
-# notes in README.md.
+# main mirrors upstream/main commit for commit; tenant-selector is the fork's
+# release branch. Once a week this fast-forwards main to upstream and, when
+# that brought new commits, opens a pull request main -> tenant-selector so
+# the merge (and any conflicts) is visible on GitHub. Resolving happens
+# locally; see the fork notes in README.md.
 
 on:
   schedule:
@@ -33,43 +34,41 @@ jobs:
       - name: Compare
         id: cmp
         run: |
-          if git merge-base --is-ancestor upstream/main origin/main; then
+          if git merge-base --is-ancestor upstream/main origin/tenant-selector; then
             echo "new=false" >> "$GITHUB_OUTPUT"
-            echo "main already contains upstream/main"
+            echo "tenant-selector already contains upstream/main"
             exit 0
           fi
           version=$(git show upstream/main:package.json | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')
           echo "new=true" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "branch=sync/upstream-v$version" >> "$GITHUB_OUTPUT"
-          {
+                    {
             echo 'commits<<EOF'
-            git log --oneline origin/main..upstream/main
+            git log --oneline origin/tenant-selector..upstream/main
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
-          if git merge-tree --write-tree origin/main upstream/main >/dev/null 2>&1; then
+          if git merge-tree --write-tree origin/tenant-selector upstream/main >/dev/null 2>&1; then
             echo "clean=yes" >> "$GITHUB_OUTPUT"
           else
             echo "clean=no" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Push sync branch
+      - name: Mirror upstream into main
         if: steps.cmp.outputs.new == 'true'
-        run: git push --force origin upstream/main:refs/heads/${{ steps.cmp.outputs.branch }}
+        run: git push origin upstream/main:refs/heads/main
 
       - name: Open pull request
         if: steps.cmp.outputs.new == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.cmp.outputs.version }}
-          BRANCH: ${{ steps.cmp.outputs.branch }}
           CLEAN: ${{ steps.cmp.outputs.clean }}
           COMMITS: ${{ steps.cmp.outputs.commits }}
         run: |
-          if gh pr list --head "$BRANCH" --state open --json number --jq 'length' | grep -q '^[1-9]'; then
-            echo "pull request for $BRANCH already open"
+          if gh pr list --head main --base tenant-selector --state open --json number --jq 'length' | grep -q '^[1-9]'; then
+            echo "pull request main -> tenant-selector already open"
             exit 0
           fi
           if [ "$CLEAN" = "yes" ]; then merge="merges cleanly"; else merge="has conflicts — resolve locally, upstream version wins in the files upstream took over"; fi
-          body=$(printf 'Upstream v%s is available. The merge into main %s.\n\nNew upstream commits:\n```\n%s\n```\n\nProcedure: fetch upstream, merge upstream/main into main locally, run `npm run check` and `npm run build`, push main. This PR closes itself once main contains the upstream commits.' "$VERSION" "$merge" "$COMMITS")
-          gh pr create --base main --head "$BRANCH" --title "Upstream v$VERSION" --body "$body"
+          body=$(printf 'Upstream v%s is available. main now mirrors it. The merge into tenant-selector %s.\n\nNew upstream commits:\n```\n%s\n```\n\nProcedure: fetch upstream, merge main into tenant-selector locally, run `npm run check` and `npm run build`, push tenant-selector. This PR closes itself once tenant-selector contains the upstream commits.' "$VERSION" "$merge" "$COMMITS")
+          gh pr create --base tenant-selector --head main --title "Upstream v$VERSION" --body "$body"

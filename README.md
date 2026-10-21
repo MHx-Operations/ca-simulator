@@ -6,8 +6,10 @@ A Conditional Access policy simulator for Microsoft Entra ID. Evaluate sign-in s
 > [haakonwibe/ca-simulator](https://github.com/haakonwibe/ca-simulator). It adds a
 > tenant switcher for consultants and MSPs who manage several tenants (see
 > [Multiple tenants](#multiple-tenants)) and otherwise follows upstream release by
-> release. Report simulator issues upstream and tenant-switcher issues here. A weekly
-> workflow opens a pull request whenever a new upstream release is available.
+> release: `main` mirrors upstream commit for commit, `tenant-selector` is the
+> release branch of this fork. Report simulator issues upstream and tenant-switcher
+> issues here. A weekly workflow opens a pull request whenever a new upstream release
+> is available.
 
 <p align="center">
   <img src="docs/screenshots/grid-view.png" width="32%" alt="Grid View" />
