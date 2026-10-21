@@ -71,4 +71,4 @@ jobs:
           fi
           if [ "$CLEAN" = "yes" ]; then merge="merges cleanly"; else merge="has conflicts — resolve locally, upstream version wins in the files upstream took over"; fi
           body=$(printf 'Upstream v%s is available. main now mirrors it. The merge into tenant-selector %s.\n\nNew upstream commits:\n```\n%s\n```\n\nProcedure: fetch upstream, merge main into tenant-selector locally, run `npm run check` and `npm run build`, push tenant-selector. This PR closes itself once tenant-selector contains the upstream commits.' "$VERSION" "$merge" "$COMMITS")
-          gh pr create --base tenant-selector --head main --title "Upstream v$VERSION" --body "$body"
+          gh pr create --base tenant-selector --head main --title "Upstream v$VERSION" --body "$body" --assignee mho21
