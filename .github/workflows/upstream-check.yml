@@ -1,0 +1,75 @@
+name: Upstream check
+
+# Looks for new upstream releases once a week and opens a pull request that
+# carries the upstream commits, so the merge (and any conflicts) is visible
+# on GitHub and CI can run on it. Resolving happens locally; see the fork
+# notes in README.md.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1'   # Mondays 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  UPSTREAM: https://github.com/haakonwibe/ca-simulator.git
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream "$UPSTREAM"
+          git fetch upstream main
+
+      - name: Compare
+        id: cmp
+        run: |
+          if git merge-base --is-ancestor upstream/main origin/main; then
+            echo "new=false" >> "$GITHUB_OUTPUT"
+            echo "main already contains upstream/main"
+            exit 0
+          fi
+          version=$(git show upstream/main:package.json | node -pe 'JSON.parse(require("fs").readFileSync(0,"utf8")).version')
+          echo "new=true" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "branch=sync/upstream-v$version" >> "$GITHUB_OUTPUT"
+          {
+            echo 'commits<<EOF'
+            git log --oneline origin/main..upstream/main
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+          if git merge-tree --write-tree origin/main upstream/main >/dev/null 2>&1; then
+            echo "clean=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "clean=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push sync branch
+        if: steps.cmp.outputs.new == 'true'
+        run: git push --force origin upstream/main:refs/heads/${{ steps.cmp.outputs.branch }}
+
+      - name: Open pull request
+        if: steps.cmp.outputs.new == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.cmp.outputs.version }}
+          BRANCH: ${{ steps.cmp.outputs.branch }}
+          CLEAN: ${{ steps.cmp.outputs.clean }}
+          COMMITS: ${{ steps.cmp.outputs.commits }}
+        run: |
+          if gh pr list --head "$BRANCH" --state open --json number --jq 'length' | grep -q '^[1-9]'; then
+            echo "pull request for $BRANCH already open"
+            exit 0
+          fi
+          if [ "$CLEAN" = "yes" ]; then merge="merges cleanly"; else merge="has conflicts — resolve locally, upstream version wins in the files upstream took over"; fi
+          body=$(printf 'Upstream v%s is available. The merge into main %s.\n\nNew upstream commits:\n```\n%s\n```\n\nProcedure: fetch upstream, merge upstream/main into main locally, run `npm run check` and `npm run build`, push main. This PR closes itself once main contains the upstream commits.' "$VERSION" "$merge" "$COMMITS")
+          gh pr create --base main --head "$BRANCH" --title "Upstream v$VERSION" --body "$body"
