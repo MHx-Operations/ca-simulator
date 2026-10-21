@@ -1,11 +1,13 @@
 name: Build and Push Docker Image
 
+# Fork: images are built from the release branch tenant-selector, and from
+# tags named after the upstream version they contain (v0.6.38 -> image 0.6.38).
 on:
   push:
-    branches: [main]
+    branches: [tenant-selector]
     tags: ['v*']
   pull_request:
-    branches: [main]
+    branches: [tenant-selector]
 
 env:
   REGISTRY: ghcr.io
