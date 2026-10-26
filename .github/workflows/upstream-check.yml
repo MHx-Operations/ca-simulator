@@ -20,6 +20,9 @@ env:
 
 jobs:
   check:
+    # The mhx branch carries this file into the private mirror repo, which has
+    # no tenant-selector branch; the schedule fires there too and must not act.
+    if: github.repository == 'MHx-Operations/ca-simulator'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
